@@ -24,3 +24,7 @@ app.use("/auth",authRoutes);
 app.listen(3000,() => {
     console.log("Server running on port 3000");
 });
+
+app.get("/fbje",(_,res) => {
+    res.send("Auth service running");
+});

@@ -1,7 +1,8 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+//import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
-import type { StringValue } from "ms";
+//import type { StringValue } from "ms";
+import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
 
 export const signup = async (email: string, password:string) => {
     const hashedPassword = await bcrypt.hash(password,12);
@@ -29,13 +30,20 @@ export const login = async (email: string, password:string) => {
         throw new Error("Invalid Credentials");
     }
 
-    const expiresInvalue = process.env.JWT_EXPIRES_IN as StringValue ?? "1h";
+    const accessToken = generateAccessToken({
+        userId: user.id,
+        role: user.role,
+    });
 
-    const token = jwt.sign(
-        { userId :user.id ,role : user.role },
-        process.env.JWT_SECRET!,
-        { expiresIn : expiresInvalue }
-    );
+    const refreshToken = generateRefreshToken();
 
-    return { token };
+    await prisma.refreshToken.create({
+        data: {
+            token: refreshToken,
+            userId: user.id,
+            expiresAt: new Date(Date.now()+ 7* 24 * 60 * 60 * 1000),
+        },
+    });
+
+    return { accessToken, refreshToken };
 };
