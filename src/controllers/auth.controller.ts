@@ -5,58 +5,60 @@ import { LoginSchema } from "../utils/validators.js";
 import { login } from "../services/auth.service.js";
 import { prisma } from "../config/prisma.js";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
-export const SignupController = async (req:Request , res:Response) => {
-    const data = signupSchema.parse(req.body);
-    const user = await signup(data.email,data.password);
+export const SignupController = asyncHandler(
+    async (req:Request , res:Response) => {
+        const data = signupSchema.parse(req.body);
+        const user = await signup(data.email,data.password);
+        res.status(201).json({
+            id: user.id,
+            email: user.email,
+        });
+});
 
-    res.status(201).json({
-        id: user.id,
-        email: user.email,
-    });
-};
+export const LoginController = asyncHandler (
+    async (req:Request, res:Response) => {
+        const data = LoginSchema.parse(req.body);
+        const result = await login(data.email, data.password);
+        res.json(result);
+});
 
-export const LoginController = async (req:Request, res:Response) => {
-    const data = LoginSchema.parse(req.body);
-    const result = await login(data.email, data.password);
+export const refreshController = asyncHandler(
+    async (req: Request, res:Response  ) =>{
+        const refreshToken = req.body;
+        const storedToken = await prisma.refreshToken.findUnique({
+            where: { token: refreshToken },
+            include: { user: true }
+        });
 
-    res.json(result);
-};
-
-export const refreshController = async (req: Request, res:Response  ) =>{
-    const refreshToken = req.body;
-    const storedToken = await prisma.refreshToken.findUnique({
-        where: { token: refreshToken },
-        include: { user: true }
-    });
-
-    if ( !storedToken || storedToken.expiresAt < new Date() ) {
-        return res.status(401).json({
-            message: "Invalid refresh token"
-        })
-    }
-
-    await prisma.refreshToken.delete({
-        where: { token: refreshToken }
-    });
-
-    const newAccesToken = generateAccessToken({
-        userId: storedToken.user.id,
-        role: storedToken.user.role,
-    });
-
-    const newRefreshToken = generateRefreshToken();
-
-    await prisma.refreshToken.create({
-        data : {
-            token: newRefreshToken,
-            userId: storedToken.user.id,
-            expiresAt: new Date(Date.now() + 7 * 24  * 60 * 60 * 1000),
+        if ( !storedToken || storedToken.expiresAt < new Date() ) {
+            return res.status(401).json({
+                message: "Invalid refresh token"
+            })
         }
-    });
 
-    res.json({
-        accessToken: newAccesToken,
-        refreshToken: newRefreshToken,
-    });
-};
+        await prisma.refreshToken.delete({
+            where: { token: refreshToken }
+        });
+
+        const newAccesToken = generateAccessToken({
+            userId: storedToken.user.id,
+            role: storedToken.user.role,
+        });
+
+        const newRefreshToken = generateRefreshToken();
+
+        await prisma.refreshToken.create({
+            data : {
+                token: newRefreshToken,
+                userId: storedToken.user.id,
+                expiresAt: new Date(Date.now() + 7 * 24  * 60 * 60 * 1000),
+            }
+        });
+
+        res.json({
+            accessToken: newAccesToken,
+            refreshToken: newRefreshToken,
+        });
+});

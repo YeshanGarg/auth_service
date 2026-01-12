@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes.js";
 import { authenticate } from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
+import { errorHandler } from "./middlewares/error.middleware.js";
 
 dotenv.config();
 
@@ -28,6 +29,8 @@ app.get("/admin/dashboard", authenticate, authorize(["ADMIN"]) , (req, res) => {
         user: req.user,
     });
 });
+
+app.use(errorHandler);
 
 app.listen(3000,() => {
     console.log("Server running on port 3000");

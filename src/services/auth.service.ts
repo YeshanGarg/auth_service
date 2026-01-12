@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "../config/prisma.js";
 //import type { StringValue } from "ms";
 import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
+import { AppError } from "../utils/AppError.js";
 
 export const signup = async (email: string, password:string) => {
     const hashedPassword = await bcrypt.hash(password,12);
@@ -21,13 +22,13 @@ export const login = async (email: string, password:string) => {
     });
 
     if (!user) {
-        throw new Error("Invalid Credentials");
+        throw new AppError("Invalid Credentials", 401);
     }
 
     const isValid = await bcrypt.compare(password,user.password);
 
     if (!isValid) {
-        throw new Error("Invalid Credentials");
+        throw new AppError("Invalid Credentials", 401);
     }
 
     const accessToken = generateAccessToken({
