@@ -6,6 +6,7 @@ node_modules
 
 /src/generated/prisma
 
+zscaler-root-ca.pem
 
 dist/
 
