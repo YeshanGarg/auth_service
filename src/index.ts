@@ -4,11 +4,24 @@ import authRoutes from "./routes/auth.routes.js";
 import { authenticate } from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
+import helmet from "helmet";
+import cors from "cors";
+import xss from "xss-clean";
+import hpp from "hpp";
 
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "10kb" }));
+app.use(helmet());
+app.use(cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+}));
+app.use(xss());
+app.use(hpp());
+app.disable("x-powered-by");
 
 app.get("/",(_,res) => {
     res.send("Auth service running");
