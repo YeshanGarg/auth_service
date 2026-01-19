@@ -1,12 +1,12 @@
 import express from "express";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
 import { authenticate } from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import helmet from "helmet";
 import cors from "cors";
-import xss from "xss-clean";
 import hpp from "hpp";
 
 dotenv.config();
@@ -19,7 +19,6 @@ app.use(cors({
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
 }));
-app.use(xss());
 app.use(hpp());
 app.disable("x-powered-by");
 
@@ -34,6 +33,8 @@ app.get("/profile", authenticate , (req , res) => {
     });
 });
 
+app.use("/users", userRoutes);
+
 app.use("/auth",authRoutes);
 
 app.get("/admin/dashboard", authenticate, authorize(["ADMIN"]) , (req, res) => {
@@ -43,8 +44,8 @@ app.get("/admin/dashboard", authenticate, authorize(["ADMIN"]) , (req, res) => {
     });
 });
 
-app.use(errorHandler);
-
 app.listen(3000,() => {
     console.log("Server running on port 3000");
 });
+
+app.use(errorHandler);

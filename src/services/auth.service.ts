@@ -8,8 +8,8 @@ import { AppError } from "../utils/AppError.js";
 export const signup = async (email: string, password:string) => {
     const hashedPassword = await bcrypt.hash(password,12);
 
-    return prisma.user.create({
-        data:{
+    return await prisma.user.create({
+        data: {
             email,
             password: hashedPassword,
         },
@@ -17,9 +17,14 @@ export const signup = async (email: string, password:string) => {
 };
 
 export const login = async (email: string, password:string) => {
-    const user = await prisma.user.findUnique({
-        where: {email},
-    });
+    return prisma.$transaction(async (tx) => {
+        const user = await tx.user.findFirst({
+            where: {
+                email,
+                deletedAt: null,
+            },
+
+        });    
 
     if (!user) {
         throw new AppError("Invalid Credentials", 401);
@@ -38,7 +43,7 @@ export const login = async (email: string, password:string) => {
 
     const refreshToken = generateRefreshToken();
 
-    await prisma.refreshToken.create({
+    await tx.refreshToken.create({
         data: {
             token: refreshToken,
             userId: user.id,
@@ -47,4 +52,5 @@ export const login = async (email: string, password:string) => {
     });
 
     return { accessToken, refreshToken };
+    });
 };
