@@ -53,5 +53,8 @@ It supports JWT-based authentication, refresh token rotation, RBAC-ready roles, 
 
 ## Running Locally
 
+```bash
+git clone https://github.com/YeshanGarg/auth_service.git
+cd auth_service
+cp .env.example .env
 docker compose up --build
-
