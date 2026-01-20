@@ -10,7 +10,13 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 export const SignupController = asyncHandler(
     async (req:Request , res:Response) => {
         const data = signupSchema.parse(req.body);
-        const user = await signup(data.email,data.password);
+        const user = await signup(
+            {
+                email: data.email,
+                password: data.password,
+            },
+            req.context
+        );
         res.status(201).json({
             id: user.id,
             email: user.email,
@@ -20,7 +26,13 @@ export const SignupController = asyncHandler(
 export const LoginController = asyncHandler (
     async (req:Request, res:Response) => {
         const data = LoginSchema.parse(req.body);
-        const result = await login(data.email, data.password);
+        const result = await login(
+            {
+                email: data.email,
+                password: data.password,
+            },
+            req.context
+        );
         res.json(result);
 });
 

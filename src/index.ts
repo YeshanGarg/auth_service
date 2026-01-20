@@ -8,6 +8,7 @@ import { errorHandler } from "./middlewares/error.middleware.js";
 import helmet from "helmet";
 import cors from "cors";
 import hpp from "hpp";
+import { requestContext } from "./middlewares/requestContext.middleware.js";
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use(cors({
 }));
 app.use(hpp());
 app.disable("x-powered-by");
+app.use(requestContext);
 
 app.get("/",(_,res) => {
     res.send("Auth service running");
