@@ -63,7 +63,7 @@ export const login = async (input : {email: string, password:string}, context?: 
         throw new AppError("Invalid Credentials", 401);
     }
 
-    await prisma.auditLog.create({
+    await tx.auditLog.create({
         data: {
             id: randomUUID(),
             action: "USER_LOGIN",
@@ -95,7 +95,7 @@ export const login = async (input : {email: string, password:string}, context?: 
         },
     });
 
-    await prisma.auditLog.create({
+    await tx.auditLog.create({
         data: {
             id: randomUUID(),
             action: "REFRESH_TOKEN_CREATED",
