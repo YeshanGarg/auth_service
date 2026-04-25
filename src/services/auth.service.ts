@@ -110,3 +110,90 @@ export const login = async (input : {email: string, password:string}, context?: 
     return { accessToken, refreshToken };
     });
 };
+
+export const refreshAccessToken = async (refreshToken: string, context?: RequestContext) => {
+    return prisma.$transaction(async (tx) => {
+        const storedToken = await tx.refreshToken.findUnique({
+            where: { token: refreshToken },
+            include: { user: true },
+        });
+
+        if (!storedToken || storedToken.expiresAt < new Date() || storedToken.user.deletedAt) {
+            throw new AppError("Invalid refresh token", 401);
+        }
+
+        await tx.refreshToken.delete({
+            where: { token: refreshToken },
+        });
+
+        const newAccessToken = generateAccessToken({
+            userId: storedToken.user.id,
+            role: storedToken.user.role,
+        });
+
+        const newRefreshToken = generateRefreshToken();
+
+        await tx.refreshToken.create({
+            data: {
+                token: newRefreshToken,
+                userId: storedToken.user.id,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+        });
+
+        await tx.auditLog.create({
+            data: {
+                id: randomUUID(),
+                action: "REFRESH_TOKEN_ROTATED",
+                actorId: storedToken.user.id,
+                createdAt: new Date(),
+                ip: context?.ip ?? null,
+                userAgent: context?.userAgent ?? null,
+                entity: "User",
+            },
+        });
+
+        return {
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+        };
+    });
+};
+
+export const seedDemoAdmin = async (context?: RequestContext) => {
+    const email = process.env.DEMO_ADMIN_EMAIL || "admin.demo@example.com";
+    const password = process.env.DEMO_ADMIN_PASSWORD || "DemoAdmin123!";
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.upsert({
+        where: { email },
+        update: {
+            password: hashedPassword,
+            role: "ADMIN",
+            deletedAt: null,
+        },
+        create: {
+            email,
+            password: hashedPassword,
+            role: "ADMIN",
+        },
+    });
+
+    await prisma.auditLog.create({
+        data: {
+            id: randomUUID(),
+            action: "DEMO_ADMIN_SEEDED",
+            actorId: user.id,
+            createdAt: new Date(),
+            ip: context?.ip ?? null,
+            userAgent: context?.userAgent ?? null,
+            entity: "User",
+        },
+    });
+
+    return {
+        email,
+        password,
+        role: user.role,
+    };
+};

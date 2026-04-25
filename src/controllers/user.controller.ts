@@ -1,12 +1,15 @@
 import { getUsers } from "../services/user.service.js";
-import { Request,Response,NextFunction } from "express";
+import type { Request, Response } from "express";
+import { listUsersQuerySchema } from "../utils/validators.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
-export const listUsers = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { cursor, limit = 10 } = req.query;
-        const users = await getUsers({ cursor: Number(cursor), limit: Number(limit) });
+export const listUsers = asyncHandler(
+    async (req: Request, res: Response) => {
+        const { cursor, limit } = listUsersQuerySchema.parse(req.query);
+        const users = await getUsers({
+            limit,
+            ...(cursor ? { cursor } : {}),
+        });
         res.json(users);
-    } catch (error) {
-        next(error);
     }
-};
+);
