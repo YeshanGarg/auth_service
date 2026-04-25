@@ -16,12 +16,18 @@ vi.mock("../src/services/auth.service.js", async () => {
 import app from "../src/app.js";
 
 const originalNodeEnv = process.env.NODE_ENV;
+const originalDemoMode = process.env.DEMO_MODE;
 const originalEnableDemoRoutes = process.env.ENABLE_DEMO_ROUTES;
 
 describe("Demo seed endpoint", () => {
     beforeEach(() => {
         seedDemoAdminMock.mockReset();
         process.env.NODE_ENV = originalNodeEnv;
+        if (originalDemoMode === undefined) {
+            delete process.env.DEMO_MODE;
+        } else {
+            process.env.DEMO_MODE = originalDemoMode;
+        }
         if (originalEnableDemoRoutes === undefined) {
             delete process.env.ENABLE_DEMO_ROUTES;
         } else {
@@ -31,6 +37,11 @@ describe("Demo seed endpoint", () => {
 
     afterAll(() => {
         process.env.NODE_ENV = originalNodeEnv;
+        if (originalDemoMode === undefined) {
+            delete process.env.DEMO_MODE;
+        } else {
+            process.env.DEMO_MODE = originalDemoMode;
+        }
         if (originalEnableDemoRoutes === undefined) {
             delete process.env.ENABLE_DEMO_ROUTES;
         } else {
@@ -40,6 +51,7 @@ describe("Demo seed endpoint", () => {
 
     it("returns 404 when demo route is disabled in production", async () => {
         process.env.NODE_ENV = "production";
+        delete process.env.DEMO_MODE;
         delete process.env.ENABLE_DEMO_ROUTES;
 
         const response = await request(app).post("/auth/demo/seed-admin");
@@ -51,7 +63,7 @@ describe("Demo seed endpoint", () => {
 
     it("returns seeded credentials when demo route is explicitly enabled", async () => {
         process.env.NODE_ENV = "production";
-        process.env.ENABLE_DEMO_ROUTES = "true";
+        process.env.DEMO_MODE = "true";
 
         seedDemoAdminMock.mockResolvedValue({
             email: "admin.demo@example.com",

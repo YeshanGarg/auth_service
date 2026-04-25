@@ -64,6 +64,8 @@ Data Stores:
 
 Note: demo seed route is disabled in production unless ENABLE_DEMO_ROUTES=true.
 
+For portfolio deployment, prefer DEMO_MODE=true explicitly and keep it false on production systems.
+
 ## Local Setup
 
 ### Option A: Docker (recommended)
@@ -94,9 +96,22 @@ Defined in .env.example:
 - JWT_SECRET
 - REDIS_HOST
 - REDIS_PORT
-- ENABLE_DEMO_ROUTES
+- ALLOWED_ORIGINS
+- CORS_ALLOW_NO_ORIGIN
+- DOCS_ENABLED
+- DOCS_VISIBILITY
+- DOCS_ACCESS_TOKEN
+- DEMO_MODE
+- ENABLE_DEMO_ROUTES (optional backward-compatible flag)
 - DEMO_ADMIN_EMAIL
 - DEMO_ADMIN_PASSWORD
+
+### Deployment Configuration Tips
+
+1. Set ALLOWED_ORIGINS to your portfolio domain and localhost for development.
+2. Set DOCS_VISIBILITY=public for open demos, or private with DOCS_ACCESS_TOKEN.
+3. Set DEMO_MODE=true only in demo environments.
+4. Keep DEMO_MODE=false and DOCS_VISIBILITY=private in production.
 
 ## Quality Checks
 

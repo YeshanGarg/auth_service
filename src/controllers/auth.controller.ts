@@ -43,7 +43,7 @@ export const refreshController = asyncHandler(
 
 export const seedDemoAdminController = asyncHandler(
     async (req: Request, res: Response) => {
-        const isDemoEnabled = process.env.NODE_ENV !== "production" || process.env.ENABLE_DEMO_ROUTES === "true";
+        const isDemoEnabled = process.env.DEMO_MODE === "true" || process.env.ENABLE_DEMO_ROUTES === "true";
 
         if (!isDemoEnabled) {
             throw new AppError("Not found", 404);
