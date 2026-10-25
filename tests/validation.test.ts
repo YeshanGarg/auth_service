@@ -64,6 +64,30 @@ const directNeonFixture = "postgresql://fixture:fixture-secret@ep-fixture.exampl
 const pooledNeonFixture = directNeonFixture.replace("ep-fixture.", "ep-fixture-pooler.");
 
 it.each([
+    { label: "reviewed manual main run", override: {}, valid: true },
+    { label: "pull request", override: { GITHUB_EVENT_NAME: "pull_request" }, valid: false },
+    { label: "other branch", override: { GITHUB_REF: "refs/heads/unreviewed" }, valid: false },
+    { label: "other repository", override: { GITHUB_REPOSITORY: "other/repo" }, valid: false },
+    { label: "other target", override: { NEON_MIGRATION_DATABASE_URL: directNeonFixture }, valid: false },
+    { label: "weak runtime password", override: { NEON_RUNTIME_PASSWORD: "short" }, valid: false },
+])("guards the cloud release against $label", ({ override, valid }) => {
+    const script = fileURLToPath(new URL("../scripts/neon-release.mjs", import.meta.url));
+    const url = "postgresql://fixture:fixture-secret@ep-withered-pine-b3hlkd2b.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+    const result = spawnSync(process.execPath, [script, "--check"], {
+        env: {
+            ...process.env, GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch",
+            GITHUB_REF: "refs/heads/main", GITHUB_REPOSITORY: "YeshanGarg/auth_service",
+            NEON_MIGRATION_DATABASE_URL: url, NEON_RUNTIME_PASSWORD: "a".repeat(96), ...override,
+        },
+        encoding: "utf8",
+    });
+    expect(result.status).toBe(valid ? 0 : 1);
+    if (valid) expect(result.stdout).toContain("Release guards passed; no connection attempted");
+    expect(result.stdout + result.stderr).not.toContain("fixture-secret");
+    expect(result.stdout + result.stderr).not.toContain("a".repeat(96));
+});
+
+it.each([
     { label: "pooled runtime", mode: "start", url: pooledNeonFixture, valid: true },
     { label: "direct migration", mode: "migrate", url: directNeonFixture, valid: true },
     { label: "pooled migration", mode: "migrate", url: pooledNeonFixture, valid: false },

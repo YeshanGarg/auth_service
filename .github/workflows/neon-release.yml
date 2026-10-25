@@ -1,0 +1,54 @@
+name: Neon Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full main commit SHA reviewed for this release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-production-release
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-verify:
+    if: github.ref == 'refs/heads/main' && inputs.expected_commit == github.sha
+    environment: neon-production-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    steps:
+      - name: Checkout reviewed commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+
+      - name: Install and build without database credentials
+        env:
+          DATABASE_URL: postgresql://unused:unused@localhost:5432/build_only
+        run: npm ci && npm run build
+
+      - name: Migrate and verify restricted runtime access
+        env:
+          NEON_MIGRATION_DATABASE_URL: ${{ secrets.NEON_MIGRATION_DATABASE_URL }}
+          NEON_RUNTIME_PASSWORD: ${{ secrets.NEON_RUNTIME_PASSWORD }}
+        run: node scripts/neon-release.mjs
