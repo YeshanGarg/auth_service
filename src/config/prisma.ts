@@ -1,8 +1,14 @@
+import "dotenv/config";
 import { PrismaClient } from "../generated/prisma/client.js";
 
 import { PrismaPg } from '@prisma/adapter-pg';
  
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 3000,
+  query_timeout: 3000,
+  max: 10,
+});
 
 const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;

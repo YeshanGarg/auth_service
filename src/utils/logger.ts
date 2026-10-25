@@ -1,3 +1,6 @@
+const redact = (key: string, value: unknown) =>
+    /password|token|authorization|cookie|secret|database_url|email/i.test(key) ? "[REDACTED]" : value;
+
 export const logger = {
     info(message: string, meta?:object){
         console.log(
@@ -6,7 +9,7 @@ export const logger = {
                 message,
                 meta,
                 timestamp: new Date().toISOString(),
-            })
+            }, redact)
         );
     },
 
@@ -17,7 +20,7 @@ export const logger = {
                 message,
                 meta,
                 timestamp: new Date().toISOString(),
-            })
+            }, redact)
         );
     },
 };

@@ -7,6 +7,7 @@ import swaggerUi from "swagger-ui-express";
 import type { Request, Response, NextFunction } from "express";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import healthRoutes from "./routes/health.routes.js";
 import { authenticate } from "./middlewares/auth.middleware.js";
 import { authorize } from "./middlewares/role.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
@@ -24,6 +25,10 @@ const allowNoOrigin = process.env.CORS_ALLOW_NO_ORIGIN !== "false";
 const docsEnabled = process.env.DOCS_ENABLED !== "false";
 const docsVisibility = process.env.DOCS_VISIBILITY || "public";
 const docsAccessToken = process.env.DOCS_ACCESS_TOKEN;
+const trustedProxies = (process.env.TRUST_PROXY || "").split(",").map((value) => value.trim()).filter(Boolean);
+if (trustedProxies.length) {
+    app.set("trust proxy", trustedProxies);
+}
 
 const docsAccessMiddleware = (req: Request, res: Response, next: NextFunction) => {
     if (!docsEnabled) {
@@ -35,9 +40,8 @@ const docsAccessMiddleware = (req: Request, res: Response, next: NextFunction) =
             return res.status(503).json({ message: "Docs are not configured" });
         }
 
-        const queryKey = typeof req.query.key === "string" ? req.query.key : undefined;
         const headerKey = req.headers["x-docs-key"];
-        const providedKey = typeof headerKey === "string" ? headerKey : queryKey;
+        const providedKey = typeof headerKey === "string" ? headerKey : undefined;
 
         if (providedKey !== docsAccessToken) {
             return res.status(401).json({ message: "Unauthorized" });
@@ -47,6 +51,7 @@ const docsAccessMiddleware = (req: Request, res: Response, next: NextFunction) =
     next();
 };
 
+app.use(requestContext);
 app.use(express.json({ limit: "10kb" }));
 app.use(helmet());
 app.use(
@@ -57,13 +62,13 @@ app.use(
             }
             return callback(null, allowedOrigins.includes(origin));
         },
-        credentials: true,
+        credentials: false,
         methods: ["GET", "POST", "PUT", "DELETE"],
     })
 );
 app.use(hpp());
 app.disable("x-powered-by");
-app.use(requestContext);
+app.use("/health", healthRoutes);
 
 app.get("/", (_, res) => {
     res.send("Auth service running");
@@ -89,7 +94,26 @@ app.get("/profile", authenticate, (req, res) => {
     });
 });
 
+app.get("/me", authenticate, async (req, res, next) => {
+    try {
+        const { getCurrentUser } = await import("./services/user.service.js");
+        const user = await getCurrentUser(req.user!.userId);
+        if (!user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        return res.json(user);
+    } catch (error) {
+        return next(error);
+    }
+});
+
 app.use("/users", userRoutes);
+app.post(["/auth/signup", "/auth/login", "/auth/refresh", "/auth/logout"], (_req, res, next) => {
+    if (process.env.DEMO_READ_ONLY === "true") {
+        return res.status(403).json({ message: "Public demo is read-only" });
+    }
+    return next();
+});
 app.use("/auth", authRoutes);
 
 app.get("/admin/dashboard", authenticate, authorize(["ADMIN"]), (req, res) => {

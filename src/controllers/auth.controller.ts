@@ -1,8 +1,8 @@
 import type { Request,Response } from "express";
 import { LoginSchema, refreshSchema, signupSchema } from "../utils/validators.js";
-import { login, refreshAccessToken, seedDemoAdmin, signup } from "../services/auth.service.js";
+import { login, logout, refreshAccessToken, signup } from "../services/auth.service.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { AppError } from "../utils/AppError.js";
+// import { AppError } from "../utils/AppError.js";
 
 export const SignupController = asyncHandler(
     async (req:Request , res:Response) => {
@@ -41,15 +41,23 @@ export const refreshController = asyncHandler(
         res.json(result);
 });
 
-export const seedDemoAdminController = asyncHandler(
+export const logoutController = asyncHandler(
     async (req: Request, res: Response) => {
-        const isDemoEnabled = process.env.DEMO_MODE === "true" || process.env.ENABLE_DEMO_ROUTES === "true";
-
-        if (!isDemoEnabled) {
-            throw new AppError("Not found", 404);
-        }
-
-        const result = await seedDemoAdmin(req.context);
-        res.status(201).json(result);
+        const { refreshToken } = refreshSchema.parse(req.body);
+        await logout(refreshToken, req.context);
+        res.status(204).end();
     }
 );
+
+// export const seedDemoAdminController = asyncHandler(
+//     async (req: Request, res: Response) => {
+//         const isDemoEnabled = process.env.DEMO_MODE === "true" || process.env.ENABLE_DEMO_ROUTES === "true";
+
+//         if (!isDemoEnabled) {
+//             throw new AppError("Not found", 404);
+//         }
+
+//         const result = await seedDemoAdmin(req.context);
+//         res.status(201).json(result);
+//     }
+// );

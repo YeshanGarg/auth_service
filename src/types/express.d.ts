@@ -1,6 +1,6 @@
 declare namespace Express{
     interface Request{
-        user? : JWTPayload;
+        user?: { userId: number; role: "USER" | "ADMIN" };
         context?: {
             requestId: string;
             ip: string | undefined;

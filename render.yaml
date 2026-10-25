@@ -1,0 +1,42 @@
+previews:
+  generation: off
+
+services:
+  - type: web
+    name: auth-service-api-free
+    runtime: docker
+    plan: free
+    region: singapore
+    autoDeployTrigger: off
+    healthCheckPath: /health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          name: auth-service-ratelimit-free
+          type: keyvalue
+          property: connectionString
+      - key: DEMO_READ_ONLY
+        value: "true"
+      - key: DOCS_ENABLED
+        value: "true"
+      - key: DOCS_VISIBILITY
+        value: public
+      - key: TRUST_PROXY
+        value: ""
+      - key: ALLOWED_ORIGINS
+        value: https://example.invalid
+      - key: CORS_ALLOW_NO_ORIGIN
+        value: "true"
+
+  - type: keyvalue
+    name: auth-service-ratelimit-free
+    plan: free
+    region: singapore
+    ipAllowList: []
+    maxmemoryPolicy: noeviction

@@ -1,197 +1,119 @@
 # Auth Service Backend
 
-Production-grade authentication and authorization API built with Node.js, Express, TypeScript, Prisma, PostgreSQL, and Redis.
+A portfolio-grade authentication and user-management API built with TypeScript, Express 5, PostgreSQL, Prisma 7, Redis, and JWTs. Backend-first: Swagger is the interactive client, not a separate frontend.
 
-This project demonstrates how to design and ship a secure auth backend with layered architecture, token lifecycle management, role-based access control, auditability, and automated quality checks.
+**Deployment status:** locally verified; no public deployment or hosted CI result has been verified yet. Do not treat this as a production identity provider.
 
-## What This Project Demonstrates
+**Hosting budget: strictly $0.** The [free deployment instructions](docs/deployment.md#zero-budget-deployment) use Render Free for the API/private Key Value and Neon Free for PostgreSQL. The blueprint starts with auth writes disabled for a safe public preview. No paid trial, credit-card billing, custom domain purchase or uptime workaround is required or authorized.
 
-- Secure signup and login flows with password hashing
-- JWT access token + refresh token rotation
-- RBAC enforcement with USER and ADMIN roles
-- Abuse protection with route-level rate limiting
-- Request traceability with request IDs and structured logs
-- Persistent audit logs for security-sensitive events
-- Interactive API demo experience with Swagger UI
-- Automated CI build and test pipeline
+## Quick Start
 
-## Tech Stack
+Requires Docker with Compose v2. Host-native tooling supports Node 22.12+ or 24; Docker and CI use Node 24. The committed lockfile is the dependency source of truth.
 
-- Node.js 20 + Express 5
-- TypeScript
-- Prisma ORM 7 + PostgreSQL
-- Redis (rate limiting)
-- Vitest + Supertest
-- Docker + Docker Compose
+1. Clone the repository and create local configuration:
 
-## Architecture
-
-```text
-Client / Swagger UI
-        |
-        v
-Express Routes -> Controllers -> Services -> Prisma/Data Stores
-   |             (validation)     (business logic)
-   |
-Middlewares (auth, role, context, rate limit, error handling)
-
-Data Stores:
-- PostgreSQL (users, refresh tokens, audit logs)
-- Redis (rate limit counters)
-```
-
-## Core Flows
-
-1. Signup: validate input -> hash password -> create user -> audit event
-2. Login: verify credentials -> issue access token -> create refresh token -> audit event
-3. Refresh: validate refresh token -> rotate refresh token -> issue new access token -> audit event
-4. Authorization: bearer token validation + role checks at middleware layer
-
-## Interactive Demo
-
-- Swagger Docs: http://localhost:3000/docs
-- OpenAPI JSON: http://localhost:3000/openapi.json
-
-### Guided Reviewer Flow
-
-1. Open Swagger docs.
-2. Call POST /auth/demo/seed-admin to bootstrap demo credentials.
-3. Call POST /auth/login with seeded credentials.
-4. Click Authorize and paste Bearer accessToken.
-5. Call GET /profile.
-6. Call POST /auth/refresh.
-7. Call GET /users to demonstrate ADMIN-only access.
-
-Note: demo seed route is disabled in production unless ENABLE_DEMO_ROUTES=true.
-
-For portfolio deployment, prefer DEMO_MODE=true explicitly and keep it false on production systems.
-
-## Local Setup
-
-### Option A: Docker (recommended)
-
-```bash
+```sh
 git clone https://github.com/YeshanGarg/auth_service.git
 cd auth_service
 cp .env.example .env
-docker compose up --build
+openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-### Option B: Local runtime
+2. Put the two different generated values into `POSTGRES_PASSWORD` and `JWT_SECRET` in your local environment file. Never post them in chat or commit them. Empty placeholders intentionally prevent a working shared-secret configuration. Keep `PORT=3000` for this Compose mapping. Existing database volumes retain their original credentials; changing the environment does not change an existing database password.
 
-```bash
-npm install
-cp .env.example .env
-npm run prisma:generate
+3. Build images, start dependencies, run migrations separately, then start the API:
+
+```sh
+docker compose -p auth-service-learning --profile tools build api migrate
+docker compose -p auth-service-learning up -d --wait db redis
+docker compose -p auth-service-learning run --rm migrate
+docker compose -p auth-service-learning up -d --wait api
+curl --fail http://127.0.0.1:18080/health/ready
+```
+
+Open [interactive docs](http://127.0.0.1:18080/docs/) or [OpenAPI JSON](http://127.0.0.1:18080/openapi.json). Only the API is published, on localhost port 18080. PostgreSQL and Redis stay on the Compose network. Keep the same project name so commands address the same database volume.
+
+On a corporate network that requires an approved CA, use the optional override on **build commands**:
+
+```sh
+docker compose -p auth-service-learning -f docker-compose.yml -f docker-compose.corporate.yml --profile tools build api migrate
+```
+
+The override reads `CORPORATE_CA_FILE` or the local ignored CA file. The CA is mounted as a BuildKit secret, not copied into the image. Do not disable TLS verification. Normal builds do not require this file.
+
+Stop with `docker compose -p auth-service-learning down`. Do not add `-v` unless you deliberately want to delete this project's database.
+
+## API
+
+| Method | Path | Access / Contract |
+| --- | --- | --- |
+| GET | `/health/live` | Dependency-free liveness |
+| GET | `/health/ready` | PostgreSQL + Redis check, 200 or 503 |
+| POST | `/auth/signup` | Creates USER; returns only id and email |
+| POST | `/auth/login` | Access and refresh token pair |
+| POST | `/auth/refresh` | One-time refresh rotation |
+| POST | `/auth/logout` | Idempotent revocation of presented refresh token, 204 |
+| GET | `/me` | Current active user's safe profile |
+| GET | `/profile` | Legacy current authorization-context response |
+| GET | `/users?limit=10&cursor=123` | ADMIN only; `{ items, nextCursor }` |
+| GET | `/admin/dashboard` | Current ADMIN role required |
+| GET | `/docs/`, `/openapi.json` | Public, private by header, or disabled |
+
+There is **no admin seed HTTP endpoint**, regardless of demo flags. Follow the [safe demo](docs/demo.md) using a self-created USER account. Private admin behavior is demonstrated by isolated integration fixtures, never shared credentials.
+
+## Security Decisions
+
+- Passwords: bcrypt cost 12, minimum 8 characters and maximum 72 UTF-8 bytes; never serialized.
+- Access JWTs: HS256, issuer/audience checks, validated claims, 15-minute expiry. Protected requests check the current active DB account and current role.
+- Refresh tokens: 32 random bytes, SHA-256 digest at rest, 7-day sliding expiry. A conditional delete in a transaction gives one winner on simultaneous refresh; replay receives 401, not family-wide revocation.
+- Logout revokes only the presented refresh token. Other sessions and issued access tokens remain usable. Logout-all and immediate access-session revocation are not implemented.
+- Redis Lua makes counter/expiry changes atomic. Per-IP, per-route limits per minute: signup 3, login 5, refresh 20, logout 5. Store failure returns 503 rather than bypassing limits.
+- Safe user projections, transactional auth audit events, structured redacted logs, response request IDs, validation errors, 10 KB JSON limit, Helmet, explicit CORS allowlist, and opt-in trusted proxy networks.
+
+Read the [threat model and limitations](docs/security.md) before hosting writable signup publicly. Per-IP limits are not a complete abuse or account-retention policy.
+
+## Verification
+
+With Node installed and a valid local `DATABASE_URL` for generation:
+
+```sh
+npm ci
+npm run lint
+npm run typecheck
 npm run build
-npm start
+npm run test:unit
+npm audit --audit-level=high
 ```
 
-## Environment Variables
+For generation-only commands, `DATABASE_URL=postgresql://unused:unused@localhost:5432/build_only npm ci` is sufficient; that value does not configure a working runtime database. `typecheck` also checks test code, not just application code.
 
-Defined in .env.example:
+Run the **real-store suite and coverage** in the built tool image against this project's healthy dependencies:
 
-- PORT
-- DATABASE_URL
-- JWT_SECRET
-- REDIS_HOST
-- REDIS_PORT
-- ALLOWED_ORIGINS
-- CORS_ALLOW_NO_ORIGIN
-- DOCS_ENABLED
-- DOCS_VISIBILITY
-- DOCS_ACCESS_TOKEN
-- DEMO_MODE
-- ENABLE_DEMO_ROUTES (optional backward-compatible flag)
-- DEMO_ADMIN_EMAIL
-- DEMO_ADMIN_PASSWORD
-
-### Deployment Configuration Tips
-
-1. Set ALLOWED_ORIGINS to your portfolio domain and localhost for development.
-2. Set DOCS_VISIBILITY=public for open demos, or private with DOCS_ACCESS_TOKEN.
-3. Set DEMO_MODE=true only in demo environments.
-4. Keep DEMO_MODE=false and DOCS_VISIBILITY=private in production.
-
-## Quality Checks
-
-```bash
-# run test suite
-npm test
-
-# compile and type-check
-npm run build
-
-# run both (showcase command)
-npm run check
+```sh
+docker compose -p auth-service-learning run --rm --no-deps --user root \
+  -e REDIS_HOST=redis -e JWT_SECRET=integration-test-only-not-for-deployment \
+  migrate npm run test:coverage
 ```
 
-## CI
+The fixed key above is only for test fixtures, never deployment. Rebuild the `migrate` image after source changes; source is not bind-mounted. Root is used only for the disposable coverage container to write reports; the API and migration command run as `node` by default. Reports from this disposable container are not persisted on the host. CI uploads its report as an artifact.
 
-GitHub Actions workflow at .github/workflows/ci.yml runs:
+`npm test` skips store tests unless explicitly enabled. `npm run test:integration` and `npm run test:coverage` enable them and require an already migrated, **isolated test database** and Redis. Tests create unique fixtures and remove only their own records/keys; never point them at production. `npm run check` is build plus tests, not a substitute for lint or store coverage.
 
-1. npm ci
-2. npm run build
-3. npm test
+CI defines clean installation, lint, app/test typechecking, build, store-independent unit tests, migration deploy, real-store coverage, dependency audit, and both Docker targets. Coverage gates cover controllers, middleware, services and utilities: 75% lines/statements, 70% functions, 65% branches. They do not claim coverage of the process lifecycle or every configuration path.
 
-## Security Highlights
+Local checkpoint (2026-10-25): **62 tests passed**, 93.60% line / 89.74% branch coverage in that scope, and zero reported npm audit vulnerabilities. Both images built, migrations applied, legacy-token migration compatibility checked on a temporary table, and runtime readiness / clean SIGTERM restart verified. The free Render blueprint passed the published schema check; Redis URL routing and the read-only preview guard are tested. This is local evidence, not a hosted CI or public-deployment claim.
 
-- bcrypt password hashing
-- JWT verification middleware
-- Refresh token rotation
-- Role-based authorization middleware
-- Helmet + HPP hardening
-- Auth endpoint rate limiting
-- Centralized error handling
-- Audit log persistence for security-relevant actions
+## Configuration And Operations
 
-## API Endpoints (Summary)
+Use the tracked example for variable descriptions. Runtime startup rejects missing DB configuration, short JWT secrets, invalid ports and incomplete private-doc settings. `TRUST_PROXY` is empty by default: do not trust arbitrary forwarded IP headers. Configure only hosting-provided proxy IPs/CIDRs after verifying the topology.
 
-- GET /
-- GET /docs
-- POST /auth/signup
-- POST /auth/login
-- POST /auth/refresh
-- POST /auth/demo/seed-admin
-- GET /profile
-- GET /users (ADMIN only)
-- GET /admin/dashboard (ADMIN only)
+For host-native development, supply real PostgreSQL/Redis connection settings (`REDIS_HOST=127.0.0.1`); the default Compose stack deliberately does not publish those ports. `npm run build && npm start` serves the compiled application. Run `npm run prisma:migrate:deploy` as a controlled release step, not on every API process startup.
 
-## Challenges and Design Decisions
+- [Architecture and implementation walkthrough](docs/architecture.md)
+- [Security policy and remaining tradeoffs](docs/security.md)
+- [Reviewer demo](docs/demo.md)
+- [Deployment and incident runbook](docs/deployment.md)
+- [Upgrade plan and implementation status](AUTH_SERVICE_PORTFOLIO_UPGRADE_PLAN.md)
 
-1. Token Security vs User Experience:
-        Short-lived access tokens were chosen for reduced blast radius, while refresh token rotation keeps sessions usable without forcing frequent logins.
-2. Thin Controllers, Rich Services:
-        Business logic is concentrated in services so controllers stay focused on validation and transport concerns, improving maintainability and testability.
-3. Demo Safety:
-        The demo seed endpoint is intentionally gated behind environment checks so demo convenience does not leak into production behavior.
-4. Auditable Auth Events:
-        Security-critical flows write audit records to support incident investigation and operational visibility.
-
-## Resume and LinkedIn Highlights
-
-Use any of these directly in your profile:
-
-- Built a production-style authentication backend using Node.js, Express, TypeScript, Prisma, PostgreSQL, and Redis with layered architecture and centralized error handling.
-- Implemented JWT access tokens with refresh token rotation, role-based authorization (USER and ADMIN), and route-level rate limiting for secure auth flows.
-- Added observability features including structured logging, request correlation IDs, and persistent audit logs for security-relevant actions.
-- Delivered an interactive backend demo via Swagger/OpenAPI with guided flows, plus CI automation (build + tests) using GitHub Actions.
-- Wrote integration tests with Vitest and Supertest to validate auth boundaries, protected routes, and demo-route gating behavior.
-
-## Interview Talking Points
-
-When discussing this project, emphasize:
-
-1. Why refresh token rotation is safer than long-lived access tokens.
-2. How middleware enforces cross-cutting concerns (auth, role checks, rate limiting, error handling).
-3. How service-layer design improves testability and future feature work.
-4. How the Swagger demo and CI pipeline improve reviewer confidence and developer onboarding.
-
-## Portfolio Notes
-
-This repository is intentionally backend-focused and demonstrates:
-
-- system design clarity
-- secure coding practices
-- testability and automation
-- production-minded API engineering
+The Redis dump is intentionally untracked and ignored. Removing a file from current tracking does not erase Git history; historical data still needs an owner review before publication. Commented legacy implementations remain for learning comparison and are not enabled features.

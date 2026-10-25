@@ -1,6 +1,17 @@
 node_modules
 dist
 .env
+.env.*
 .git
 .gitignore
 npm-debug.log
+*.pem
+*.key
+*.rdb
+*.dump
+dump*.sql
+backups
+coverage
+src/generated
+prisma/*.db
+prisma/*.db-journal
