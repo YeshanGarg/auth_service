@@ -2,7 +2,7 @@
 
 ## Status And Release Boundary
 
-Local Docker builds, migrations and real-store tests are verified. No cloud resources, live URL or hosted CI result have been verified. Do not infer those from local test success. No paid resources should be provisioned without the owner's approval.
+Local Docker builds, local migrations and real-store tests are verified. [Hosted CI passed for commit 07ec97d](https://github.com/YeshanGarg/auth_service/actions/runs/40186201708). The existing Neon Free project is authenticated and its PostgreSQL-only policy is applied. Cloud migrations and a public API URL remain unverified. Do not infer those from local test success. No paid resources are authorized.
 
 **Budget constraint: $0, with no paid trials, card-backed overages or automatic upgrades.** If an account flow requires a payment card, stop rather than continue. Existing paid workspaces must not be used for this setup.
 
@@ -14,19 +14,31 @@ The initial public preview sets `DEMO_READ_ONLY=true`: signup, login, refresh an
 
 ### 1. Create The Free Database
 
+The existing project `auth-service-demo` (`solitary-dust-98871989`), branch `production`, is verified on Neon Free in Singapore with PostgreSQL 18. Reuse it; do not create a replacement. `neon config plan` and `neon deploy --no-env-pull` both reported no changes, with Postgres as the only utilized service. Neon MCP read-only access succeeds. Existing local Compose PostgreSQL remains separate.
+
 Sign in at [Neon](https://console.neon.tech/) yourself. Create a separate project on the **Free** plan, ideally in an AWS region near Singapore. Keep scale-to-zero enabled and use minimum compute. Do not enable paid features, attach a card, upgrade to Launch/Scale, or use a paid organization. Free compute/transfer exhaustion suspends service instead of charging; storage caps reject writes. Current official [Free plan limits](https://neon.com/docs/introduction/plans) are not a promise of unlimited uptime.
 
 Keep the connection strings private. For migration, obtain the **direct/non-pooled** owner's connection string. For serving, provision a separate restricted role after migrations and obtain its **pooled** connection string. Keep the provider's TLS settings and use certificate verification (`sslmode=verify-full`); never add `rejectUnauthorized=false` or disable TLS.
 
 ### 2. Apply Migrations Locally
 
-Render Free has no shell/one-off job or paid pre-deploy dependency in this setup. Use the already built migration image locally with an ignored **new** environment file containing only `DATABASE_URL` set to the direct migration-owner connection string. Name it `.env.deploy`, keep it out of source control, and enter the value directly in your editor, not in chat or shell history.
+Render Free has no shell/one-off job or paid pre-deploy dependency in this setup. The saved `.env.deploy` contains the direct migration-owner `DATABASE_URL`; preserve it. Pull generated Neon variables into a separate ignored `.env.neon`, never over the existing `.env` or `.env.deploy`:
 
 ```sh
-docker run --rm --env-file .env.deploy auth-service:migrations
+neon config plan --project-id solitary-dust-98871989 --branch production
+neon deploy --project-id solitary-dust-98871989 --branch production --no-env-pull
+neon env pull --project-id solitary-dust-98871989 --branch production --service postgres --file .env.neon
+npm run prisma:migrate:neon -- --check
+npm run prisma:migrate:neon
+npm run build
+npm run start:neon
 ```
 
-Build the image first using the README's corporate override if required. Do not point this command at the local Compose URL or a real customer database. Check that all migrations succeed before proceeding. Do not run the integration suite against this deployed database. Configure/grant a restricted runtime role using Neon's private SQL editor; it needs schema usage, DML on application tables, and sequence access, not schema ownership or role/database creation privileges.
+The launcher loads unset base settings from `.env`, explicitly selects the appropriate Neon URL, checks that runtime and migration URLs refer to the same database, rejects pooled migration targets, and sets `sslmode=verify-full` in the child process only. It never rewrites the supplied files or prints credentials. `--check` validates configuration only; it is not a connectivity or migration test. Starting the API also requires a unique 32+ character `JWT_SECRET` and reachable Redis; this workflow does not publish the private local Compose stores. Keep the existing Prisma PostgreSQL adapter for this long-running Express process.
+
+Check that all migrations succeed before proceeding. Do not run the integration suite against this deployed database. Configure/grant a restricted runtime role using Neon's private SQL editor; it needs schema usage, DML on application tables, and sequence access, not schema ownership or role/database creation privileges. The URL pulled by the CLI is not evidence of least privilege: replace its runtime credential privately with the restricted role before serving traffic. Do not publish the migration-owner URL to Render.
+
+**Connectivity checkpoint (2026-10-26):** Neon MCP lists no application tables. Host and Docker PostgreSQL handshakes timed out; a raw probe established TCP 5432 but received no PostgreSQL SSL-negotiation response. No migrations were applied. Use an approved network that permits the PostgreSQL protocol and rerun the migration command; do not disable TLS or bypass network policy. A read-only API smoke run returned live/docs/OpenAPI 200, signup 403, seed 404 and readiness 503. Shutdown exited nonzero with stores unavailable. This does not prove a Neon-backed auth flow.
 
 ### 3. Publish And Create The Blueprint
 
@@ -53,7 +65,7 @@ Choose a container host with a persistent PostgreSQL database, private Redis and
 - [Render free-service terms](https://render.com/docs/free): web services sleep after 15 idle minutes and can take about a minute to wake. Free Postgres is limited to 1 GB, expires after 30 days, and has no backups. Free Key Value is memory-only and loses counters on restart. Free web services cannot run one-off jobs. Included bandwidth/build limits and payment-method rules apply. This is a temporary preview, not a durable zero-cost database recommendation.
 - [Railway pricing plans](https://docs.railway.com/reference/pricing/plans): the free plan includes $1 monthly credit; the initial trial grant is separate. Hobby starts at $5/month including $5 usage, but resource usage beyond that is additional. That is not a $5 maximum for this three-service stack. Check actual measured use and enforce an approved spend policy before provisioning.
 
-These are dated readings of official documentation, not reserved capacity, an availability guarantee or an approved purchase. Railway paid plans are excluded by the $0 constraint. The selected free setup above avoids Render's expiring Postgres; no resources have yet been provisioned. Provider account eligibility and end-to-end connectivity still require actual verification.
+These are dated readings of official documentation, not reserved capacity, an availability guarantee or an approved purchase. Railway paid plans are excluded by the $0 constraint. The selected free setup above avoids Render's expiring Postgres. The existing Neon Free project is verified; Render creation remains pending account sign-in. End-to-end cloud connectivity still requires actual verification.
 
 ## Release Checklist
 

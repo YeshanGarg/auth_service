@@ -1,3 +1,8 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, expect, it, vi } from "vitest";
 import { signupSchema, LoginSchema, refreshSchema, listUsersQuerySchema } from "../src/utils/validators.js";
 import { logger } from "../src/utils/logger.js";
@@ -52,5 +57,39 @@ it("redacts nested credentials and personal data in structured metadata", () => 
         expect(message.meta.nested).toEqual({ password: "[REDACTED]", refreshToken: "[REDACTED]", email: "[REDACTED]" });
     } finally {
         output.mockRestore();
+    }
+});
+
+const directNeonFixture = "postgresql://fixture:fixture-secret@ep-fixture.example.neon.tech/neondb?sslmode=require";
+const pooledNeonFixture = directNeonFixture.replace("ep-fixture.", "ep-fixture-pooler.");
+
+it.each([
+    { label: "pooled runtime", mode: "start", url: pooledNeonFixture, valid: true },
+    { label: "direct migration", mode: "migrate", url: directNeonFixture, valid: true },
+    { label: "pooled migration", mode: "migrate", url: pooledNeonFixture, valid: false },
+    { label: "different endpoint", mode: "migrate", url: directNeonFixture.replace("ep-fixture.", "ep-other."), valid: false },
+    { label: "different database", mode: "start", url: pooledNeonFixture.replace("/neondb?", "/other?"), valid: false },
+    { label: "non-Postgres URL", mode: "start", url: pooledNeonFixture.replace("postgresql:", "https:"), valid: false },
+])("checks Neon $label without connecting or rewriting configuration", ({ mode, url, valid }) => {
+    const directory = mkdtempSync(join(tmpdir(), "auth-neon-"));
+    const files = {
+        ".env": "DATABASE_URL=postgresql://local:local@localhost/local\nJWT_SECRET=fixture-secret\n",
+        ".env.neon": `DATABASE_URL=${mode === "start" ? url : pooledNeonFixture}\nDATABASE_URL_UNPOOLED=${directNeonFixture}\n`,
+        ".env.deploy": `DATABASE_URL=${mode === "migrate" ? url : directNeonFixture}\n`,
+    };
+    try {
+        for (const [name, content] of Object.entries(files)) writeFileSync(join(directory, name), content);
+        const script = fileURLToPath(new URL("../scripts/neon.mjs", import.meta.url));
+        const result = spawnSync(process.execPath, [script, mode, "--check"], {
+            cwd: directory, encoding: "utf8",
+        });
+        expect(result.status).toBe(valid ? 0 : 1);
+        if (valid) expect(result.stdout).toContain("TLS verification enforced; no connection attempted");
+        expect(result.stdout + result.stderr).not.toContain("fixture-secret");
+        for (const [name, content] of Object.entries(files)) {
+            expect(readFileSync(join(directory, name), "utf8")).toBe(content);
+        }
+    } finally {
+        rmSync(directory, { recursive: true, force: true });
     }
 });

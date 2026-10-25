@@ -2,7 +2,7 @@
 
 A portfolio-grade authentication and user-management API built with TypeScript, Express 5, PostgreSQL, Prisma 7, Redis, and JWTs. Backend-first: Swagger is the interactive client, not a separate frontend.
 
-**Deployment status:** locally verified; no public deployment or hosted CI result has been verified yet. Do not treat this as a production identity provider.
+**Deployment status:** local verification and [hosted CI](https://github.com/YeshanGarg/auth_service/actions/runs/40186201708) passed. Neon Free is connected and its PostgreSQL-only policy is applied, but cloud migrations and public API deployment are not complete. Do not treat this as a production identity provider.
 
 **Hosting budget: strictly $0.** The [free deployment instructions](docs/deployment.md#zero-budget-deployment) use Render Free for the API/private Key Value and Neon Free for PostgreSQL. The blueprint starts with auth writes disabled for a safe public preview. No paid trial, credit-card billing, custom domain purchase or uptime workaround is required or authorized.
 
@@ -102,13 +102,15 @@ The fixed key above is only for test fixtures, never deployment. Rebuild the `mi
 
 CI defines clean installation, lint, app/test typechecking, build, store-independent unit tests, migration deploy, real-store coverage, dependency audit, and both Docker targets. Coverage gates cover controllers, middleware, services and utilities: 75% lines/statements, 70% functions, 65% branches. They do not claim coverage of the process lifecycle or every configuration path.
 
-Local checkpoint (2026-10-25): **62 tests passed**, 93.60% line / 89.74% branch coverage in that scope, and zero reported npm audit vulnerabilities. Both images built, migrations applied, legacy-token migration compatibility checked on a temporary table, and runtime readiness / clean SIGTERM restart verified. The free Render blueprint passed the published schema check; Redis URL routing and the read-only preview guard are tested. This is local evidence, not a hosted CI or public-deployment claim.
+Local checkpoint (2026-10-26): **68 tests passed**, 93.60% line / 89.74% branch coverage in that scope, and zero reported npm audit vulnerabilities. Both images built; local migrations, legacy-token migration compatibility, runtime readiness and clean SIGTERM restart were previously verified. The free Render blueprint passed the published schema check; Redis URL routing, the read-only preview guard and Neon launcher configuration guards are tested. Store integration tests use isolated local PostgreSQL/Redis, not Neon. Hosted CI separately passed for commit `07ec97d`; no public-deployment claim is made.
 
 ## Configuration And Operations
 
 Use the tracked example for variable descriptions. Runtime startup rejects missing DB configuration, short JWT secrets, invalid ports and incomplete private-doc settings. `TRUST_PROXY` is empty by default: do not trust arbitrary forwarded IP headers. Configure only hosting-provided proxy IPs/CIDRs after verifying the topology.
 
 For host-native development, supply real PostgreSQL/Redis connection settings (`REDIS_HOST=127.0.0.1`); the default Compose stack deliberately does not publish those ports. `npm run build && npm start` serves the compiled application. Run `npm run prisma:migrate:deploy` as a controlled release step, not on every API process startup.
+
+For the linked Neon database, follow the [isolated environment workflow](docs/deployment.md#2-apply-migrations-locally). `npm run prisma:migrate:neon` uses the saved direct migration-owner URL; `npm run start:neon` uses the pulled runtime URL. Both enforce certificate verification without rewriting environment files. Append `-- --check` to validate configuration without connecting. A valid JWT secret and reachable Redis are still required to run the API; the local Compose stores are private.
 
 - [Architecture and implementation walkthrough](docs/architecture.md)
 - [Security policy and remaining tradeoffs](docs/security.md)
