@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import dotenv from "dotenv";
 
 try {
@@ -15,7 +15,9 @@ try {
     const direct = new URL(cloud.DATABASE_URL_UNPOOLED);
     const source = mode === "migrate"
         ? dotenv.parse(readFileSync(".env.deploy"))
-        : cloud;
+        : existsSync(".env.neon.runtime")
+            ? dotenv.parse(readFileSync(".env.neon.runtime"))
+            : cloud;
     const database = new URL(source.DATABASE_URL);
     if (!["postgres:", "postgresql:"].includes(database.protocol) ||
         !direct.hostname.endsWith(".neon.tech") || direct.hostname.includes("-pooler") ||

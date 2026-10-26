@@ -94,13 +94,16 @@ it.each([
     { label: "different endpoint", mode: "migrate", url: directNeonFixture.replace("ep-fixture.", "ep-other."), valid: false },
     { label: "different database", mode: "start", url: pooledNeonFixture.replace("/neondb?", "/other?"), valid: false },
     { label: "non-Postgres URL", mode: "start", url: pooledNeonFixture.replace("postgresql:", "https:"), valid: false },
-])("checks Neon $label without connecting or rewriting configuration", ({ mode, url, valid }) => {
+    { label: "restricted runtime preference", mode: "start", url: pooledNeonFixture, runtimeUrl: pooledNeonFixture, valid: true },
+    { label: "mismatched restricted runtime", mode: "start", url: pooledNeonFixture, runtimeUrl: pooledNeonFixture.replace("ep-fixture", "ep-other"), valid: false },
+])("checks Neon $label without connecting or rewriting configuration", ({ mode, url, valid, runtimeUrl }) => {
     const directory = mkdtempSync(join(tmpdir(), "auth-neon-"));
-    const files = {
+    const files: Record<string, string> = {
         ".env": "DATABASE_URL=postgresql://local:local@localhost/local\nJWT_SECRET=fixture-secret\n",
         ".env.neon": `DATABASE_URL=${mode === "start" ? url : pooledNeonFixture}\nDATABASE_URL_UNPOOLED=${directNeonFixture}\n`,
         ".env.deploy": `DATABASE_URL=${mode === "migrate" ? url : directNeonFixture}\n`,
     };
+    if (runtimeUrl) files[".env.neon.runtime"] = `DATABASE_URL=${runtimeUrl}\n`;
     try {
         for (const [name, content] of Object.entries(files)) writeFileSync(join(directory, name), content);
         const script = fileURLToPath(new URL("../scripts/neon.mjs", import.meta.url));

@@ -2,7 +2,9 @@
 
 A portfolio-grade authentication and user-management API built with TypeScript, Express 5, PostgreSQL, Prisma 7, Redis, and JWTs. Backend-first: Swagger is the interactive client, not a separate frontend.
 
-**Deployment status:** local verification and [hosted CI](https://github.com/YeshanGarg/auth_service/actions/runs/40186201708) passed. Neon Free is connected and its PostgreSQL-only policy is applied, but cloud migrations and public API deployment are not complete. Do not treat this as a production identity provider.
+**Deployment status:** public read-only preview verified on 2026-10-26. Local verification, [hosted CI](https://github.com/YeshanGarg/auth_service/actions/workflows/ci.yml), and the [Neon release](https://github.com/YeshanGarg/auth_service/actions/runs/40235676181) passed. All six cloud migrations and a controlled real auth flow using a restricted runtime role are verified. Do not treat this as a production identity provider.
+
+**Live preview:** [API docs](https://auth-service-api-free.onrender.com/docs/) | [OpenAPI](https://auth-service-api-free.onrender.com/openapi.json) | [Liveness](https://auth-service-api-free.onrender.com/health/live) | [Readiness](https://auth-service-api-free.onrender.com/health/ready). Signup, login, refresh and logout deliberately return 403 in this public preview; use the [local demo](docs/demo.md) for the full flow. Free hosting sleeps when idle and may take a minute to wake.
 
 **Hosting budget: strictly $0.** The [free deployment instructions](docs/deployment.md#zero-budget-deployment) use Render Free for the API/private Key Value and Neon Free for PostgreSQL. The blueprint starts with auth writes disabled for a safe public preview. No paid trial, credit-card billing, custom domain purchase or uptime workaround is required or authorized.
 
@@ -110,7 +112,7 @@ Use the tracked example for variable descriptions. Runtime startup rejects missi
 
 For host-native development, supply real PostgreSQL/Redis connection settings (`REDIS_HOST=127.0.0.1`); the default Compose stack deliberately does not publish those ports. `npm run build && npm start` serves the compiled application. Run `npm run prisma:migrate:deploy` as a controlled release step, not on every API process startup.
 
-For the linked Neon database, follow the [isolated environment workflow](docs/deployment.md#2-apply-migrations-locally). `npm run prisma:migrate:neon` uses the saved direct migration-owner URL; `npm run start:neon` uses the pulled runtime URL. Both enforce certificate verification without rewriting environment files. Append `-- --check` to validate configuration without connecting. A valid JWT secret and reachable Redis are still required to run the API; the local Compose stores are private.
+For the linked Neon database, follow the [isolated environment workflow](docs/deployment.md#2-apply-migrations-locally). `npm run prisma:migrate:neon` uses the saved direct migration-owner URL; `npm run start:neon` prefers the restricted URL in ignored `.env.neon.runtime`, falling back to `.env.neon` only when that file is absent. Do not use the owner fallback for a hosted API. Both commands enforce certificate verification without rewriting environment files. Append `-- --check` to validate configuration without connecting. A valid JWT secret and reachable Redis are still required to run the API; the local Compose stores are private.
 
 - [Architecture and implementation walkthrough](docs/architecture.md)
 - [Security policy and remaining tradeoffs](docs/security.md)
